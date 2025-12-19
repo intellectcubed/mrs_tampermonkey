@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PCR Toolbar
 // @namespace    http://tampermonkey.net/
-// @version      1.2.0
+// @version      1.4.0
 // @description  PCR Toolbar enhancement script - Automates populating call times
 // @author       Your Name
 // @match        https://newjersey.imagetrendelite.com/Elite/Organizationnewjersey/Agencymartinsvil/EmsRunForm
@@ -10,7 +10,6 @@
 // @downloadURL  https://raw.githubusercontent.com/intellectcubed/mrs_tampermonkey/main/src/pcr_toolbar/pcr_toolbar.user.js
 // @grant        GM_getValue
 // @grant        GM_setValue
-// @grant        GM_addValueChangeListener
 // @grant        unsafeWindow
 // ==/UserScript==
 
@@ -395,8 +394,9 @@
      * Handle Incidents button click
      */
     function handleIncidentsClick() {
-        console.log('Opening incident drawer...');
-        GM_setValue('ems:drawer:open', true);
+        console.log('[PCR Toolbar] Dispatching openDrawer event...');
+        const event = new CustomEvent('ems:openDrawer');
+        window.dispatchEvent(event);
     }
 
     /**
@@ -633,17 +633,14 @@
         console.log('PCR Toolbar script initializing...');
         console.log('Field mapping configuration loaded:', fieldMapping);
 
-        // Clear any previously selected incident
-        GM_setValue('ems:selectedIncident', null);
-
         // Clear global incident data
         unsafeWindow.EMSIncidentData = null;
 
-        // Set up listener for incident selection
-        GM_addValueChangeListener('ems:selectedIncident', function(name, oldValue, newValue, remote) {
-            console.log('ems:selectedIncident changed:', newValue);
-            if (newValue) {
-                handleIncidentSelection(newValue);
+        // Listen for incident selection events from drawer
+        window.addEventListener('ems:incidentSelected', function(e) {
+            console.log('[PCR Toolbar] Received incidentSelected event:', e.detail);
+            if (e.detail && e.detail.incident) {
+                handleIncidentSelection(e.detail.incident);
             }
         });
 

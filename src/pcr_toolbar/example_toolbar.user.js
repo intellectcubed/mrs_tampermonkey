@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Example Toolbar - EMS Incident IPC Demo
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0
+// @version      1.1.0
 // @description  Example script demonstrating IPC with EMS Incident Drawer
 // @author       You
 // @match        https://example.com/*
@@ -95,8 +95,9 @@
      * Opens the drawer using IPC
      */
     function handleIncidentsClick() {
-        console.log('Opening drawer via IPC...');
-        GM_setValue('ems:drawer:open', true);
+        console.log('[Example Toolbar] Dispatching openDrawer event...');
+        const event = new CustomEvent('ems:openDrawer');
+        window.dispatchEvent(event);
     }
 
     /**
@@ -121,15 +122,14 @@
      * Initialize the script
      */
     function init() {
-        console.log('Example Toolbar initializing...');
+        console.log('[Example Toolbar] Initializing...');
 
-        // Clear any previously selected incident
-        GM_setValue('ems:selectedIncident', null);
-
-        // Set up listener for incident selection
-        GM_addValueChangeListener('ems:selectedIncident', function(name, oldValue, newValue, remote) {
-            console.log('ems:selectedIncident changed:', newValue);
-            handleIncidentSelection(newValue);
+        // Listen for incident selection events from drawer
+        window.addEventListener('ems:incidentSelected', function(e) {
+            console.log('[Example Toolbar] Received incidentSelected event:', e.detail);
+            if (e.detail && e.detail.incident) {
+                handleIncidentSelection(e.detail.incident);
+            }
         });
 
         // Create toolbar when page is ready

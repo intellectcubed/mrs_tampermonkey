@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         EMS Incident Manager
 // @namespace    http://tampermonkey.net/
-// @version      1.3.0
+// @version      1.4.0
 // @description  EMS Incident drawer with Supabase integration
 // @author       You
 // @match        https://example.com/*
@@ -702,9 +702,12 @@
                 incidentData = currentIncident;
             }
 
-            // Save to GM storage for IPC
-            GM_setValue('ems:selectedIncident', incidentData);
-            console.log('Incident selected:', incidentData);
+            // Dispatch custom event for cross-script communication
+            const event = new CustomEvent('ems:incidentSelected', {
+                detail: { incident: incidentData }
+            });
+            window.dispatchEvent(event);
+            console.log('[EMS Drawer] Incident selected and event dispatched:', incidentData);
 
             // Close the drawer immediately (no alert)
             toggleDrawer();
@@ -1051,6 +1054,7 @@
 
     // ==================== INITIALIZATION ====================
     async function init() {
+        console.log('[EMS Drawer] Initializing...');
         try {
             // Initialize Supabase REST client
             initSupabase();
@@ -1072,17 +1076,12 @@
                 toggleDrawer();
             });
 
-            // Listen for drawer open requests
-            GM_addValueChangeListener('ems:drawer:open', function(name, oldValue, newValue, remote) {
-                console.log('ems:drawer:open changed:', newValue);
-                if (newValue === true) {
-                    // Open the drawer
-                    const drawer = document.getElementById('ems-drawer');
-                    if (drawer && !drawer.classList.contains('ems-drawer-open')) {
-                        toggleDrawer();
-                    }
-                    // Reset the flag
-                    GM_setValue('ems:drawer:open', false);
+            // Listen for drawer open requests via custom events
+            window.addEventListener('ems:openDrawer', function() {
+                console.log('[EMS Drawer] Received openDrawer event');
+                const drawer = document.getElementById('ems-drawer');
+                if (drawer && !drawer.classList.contains('ems-drawer-open')) {
+                    toggleDrawer();
                 }
             });
 
