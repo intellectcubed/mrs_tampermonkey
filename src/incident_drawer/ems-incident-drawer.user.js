@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         EMS Incident Manager
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0
+// @version      1.0.1
 // @description  EMS Incident drawer with Supabase integration
 // @author       You
 // @match        https://example.com/*
@@ -33,8 +33,34 @@
     const PAGE_SIZE = 20;
 
     // ==================== SUPABASE INITIALIZATION ====================
+    function waitForSupabase() {
+        return new Promise((resolve, reject) => {
+            let attempts = 0;
+            const maxAttempts = 50;
+
+            const checkSupabase = () => {
+                attempts++;
+                console.log(`Checking for Supabase library (attempt ${attempts})...`);
+                console.log('window.supabase:', window.supabase);
+                console.log('window keys:', Object.keys(window).filter(k => k.toLowerCase().includes('supabase')));
+
+                if (window.supabase && typeof window.supabase.createClient === 'function') {
+                    console.log('Supabase library found!');
+                    resolve();
+                } else if (attempts >= maxAttempts) {
+                    reject(new Error('Supabase library failed to load after ' + maxAttempts + ' attempts'));
+                } else {
+                    setTimeout(checkSupabase, 100);
+                }
+            };
+
+            checkSupabase();
+        });
+    }
+
     function initSupabase() {
         supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        console.log('Supabase client initialized:', supabase);
     }
 
     // ==================== AUTHENTICATION ====================
@@ -724,11 +750,16 @@
 
     // ==================== INITIALIZATION ====================
     async function init() {
-        // Initialize Supabase
-        initSupabase();
+        try {
+            // Wait for Supabase library to load
+            console.log('Waiting for Supabase library...');
+            await waitForSupabase();
 
-        // Inject styles
-        injectStyles();
+            // Initialize Supabase
+            initSupabase();
+
+            // Inject styles
+            injectStyles();
 
         // Create floating button
         const floatingBtn = document.createElement('button');
@@ -743,12 +774,16 @@
         drawer.innerHTML = '<div id="ems-drawer-content"></div>';
         document.body.appendChild(drawer);
 
-        // Check session and navigate to appropriate view
-        const hasSession = await checkSession();
-        if (hasSession) {
-            navigateTo('list');
-        } else {
-            navigateTo('login');
+            // Check session and navigate to appropriate view
+            const hasSession = await checkSession();
+            if (hasSession) {
+                navigateTo('list');
+            } else {
+                navigateTo('login');
+            }
+        } catch (error) {
+            console.error('Initialization error:', error);
+            alert('Failed to initialize EMS Incident Manager: ' + error.message);
         }
     }
 
