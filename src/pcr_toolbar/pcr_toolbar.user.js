@@ -6,8 +6,8 @@
 // @author       Your Name
 // @match        https://newjersey.imagetrendelite.com/Elite/Organizationnewjersey/Agencymartinsvil/EmsRunForm
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=imagetrendelite.com
-// @updateURL    https://raw.githubusercontent.com/intellectcubed/tampermonkey_pcr_utils/main/src/pcr_toolbar.user.js
-// @downloadURL  https://raw.githubusercontent.com/intellectcubed/tampermonkey_pcr_utils/main/src/pcr_toolbar.user.js
+// @updateURL    https://raw.githubusercontent.com/intellectcubed/mrs_tampermonkey/main/src/pcr_toolbar/pcr_toolbar.user.js
+// @downloadURL  https://raw.githubusercontent.com/intellectcubed/mrs_tampermonkey/main/src/pcr_toolbar/pcr_toolbar.user.js
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        unsafeWindow
