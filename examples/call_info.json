@@ -1,0 +1,39 @@
+{
+  "incidentTimes": {
+    "cad": "123456789",
+    "times": {
+      "notifiedByDispatch": {
+        "date": "11/20/2025",
+        "time": "00:01:15"
+      },
+      "enRoute": {
+        "date": "11/20/2025",
+        "time": "00:06:45"
+      },
+      "onScene": {
+        "date": "11/20/2025",
+        "time": "00:18:30"
+      },
+      "arrivedAtPatient": {
+        "date": "11/20/2025",
+        "time": "00:23:10"
+      },
+      "leftScene": {
+        "date": "11/20/2025",
+        "time": "00:41:00"
+      },
+      "ptArrivedAtDestination": {
+        "date": "11/20/2025",
+        "time": "01:02:25"
+      },
+      "destinationPatientTransferOfCare": {
+        "date": "11/20/2025",
+        "time": "01:19:40"
+      },
+      "backInService": {
+        "date": "11/20/2025",
+        "time": "01:31:15"
+      }
+    }
+  }
+}
