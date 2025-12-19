@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PCR Toolbar
 // @namespace    http://tampermonkey.net/
-// @version      1.1.3
+// @version      1.2.0
 // @description  PCR Toolbar enhancement script - Automates populating call times
 // @author       Your Name
 // @match        https://newjersey.imagetrendelite.com/Elite/Organizationnewjersey/Agencymartinsvil/EmsRunForm
@@ -10,6 +10,7 @@
 // @downloadURL  https://raw.githubusercontent.com/intellectcubed/mrs_tampermonkey/main/src/pcr_toolbar/pcr_toolbar.user.js
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_addValueChangeListener
 // @grant        unsafeWindow
 // ==/UserScript==
 
@@ -67,6 +68,8 @@
     let timesBtn = null;
     let addressBtn = null;
     let incidentNumberSpan = null;
+    let incidentsBtn = null;
+    let incidentDisplayField = null;
 
     /**
      * Sleep/delay function
@@ -389,6 +392,33 @@
     }
 
     /**
+     * Handle Incidents button click
+     */
+    function handleIncidentsClick() {
+        console.log('Opening incident drawer...');
+        GM_setValue('ems:drawer:open', true);
+    }
+
+    /**
+     * Handle incident selection from drawer
+     */
+    function handleIncidentSelection(incidentObject) {
+        if (incidentObject && incidentObject.incident_number) {
+            // Copy to unsafeWindow for PCR toolbar to use
+            unsafeWindow.EMSIncidentData = incidentObject;
+
+            // Update display field
+            if (incidentDisplayField) {
+                incidentDisplayField.value = incidentObject.incident_number;
+            }
+
+            console.log('Incident selected:', incidentObject.incident_number);
+        } else {
+            console.log('No valid incident selected');
+        }
+    }
+
+    /**
      * Handle Debug button click
      */
     function handleDebugClick() {
@@ -474,7 +504,23 @@
             background-color: rgba(0, 102, 204, 0.1);
         `;
 
-        // Create incident number display
+        // Create Incidents button (leftmost)
+        incidentsBtn = document.createElement('button');
+        incidentsBtn.textContent = 'Incidents';
+        incidentsBtn.style.cssText = `
+            padding: 4px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            opacity: 1;
+            border: 1px solid #0066cc;
+            background-color: #0066cc;
+            color: white;
+            border-radius: 3px;
+        `;
+        incidentsBtn.addEventListener('click', handleIncidentsClick);
+        buttonContainer.appendChild(incidentsBtn);
+
+        // Create incident number display (old display, hidden now)
         incidentNumberSpan = document.createElement('span');
         incidentNumberSpan.style.cssText = `
             color: #0066cc;
@@ -535,6 +581,23 @@
         debugBtn.addEventListener('click', handleDebugClick);
         buttonContainer.appendChild(debugBtn);
 
+        // Create incident display field (rightmost)
+        incidentDisplayField = document.createElement('input');
+        incidentDisplayField.type = 'text';
+        incidentDisplayField.readOnly = true;
+        incidentDisplayField.value = 'No Incident';
+        incidentDisplayField.style.cssText = `
+            padding: 4px 10px;
+            font-size: 12px;
+            border: 1px solid #0066cc;
+            background-color: #f0f0f0;
+            color: #333;
+            border-radius: 3px;
+            min-width: 120px;
+            text-align: center;
+        `;
+        buttonContainer.appendChild(incidentDisplayField);
+
         // Append button container to top-pane
         topPane.appendChild(buttonContainer);
 
@@ -569,6 +632,20 @@
     function init() {
         console.log('PCR Toolbar script initializing...');
         console.log('Field mapping configuration loaded:', fieldMapping);
+
+        // Clear any previously selected incident
+        GM_setValue('ems:selectedIncident', null);
+
+        // Clear global incident data
+        unsafeWindow.EMSIncidentData = null;
+
+        // Set up listener for incident selection
+        GM_addValueChangeListener('ems:selectedIncident', function(name, oldValue, newValue, remote) {
+            console.log('ems:selectedIncident changed:', newValue);
+            if (newValue) {
+                handleIncidentSelection(newValue);
+            }
+        });
 
         // Wait for page to be ready, then wait for top-pane element
         if (document.readyState === 'loading') {

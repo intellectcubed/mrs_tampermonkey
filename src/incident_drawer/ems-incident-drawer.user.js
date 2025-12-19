@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         EMS Incident Manager
 // @namespace    http://tampermonkey.net/
-// @version      1.1.8
+// @version      1.3.0
 // @description  EMS Incident drawer with Supabase integration
 // @author       You
 // @match        https://example.com/*
@@ -9,7 +9,9 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
+// @grant        GM_addValueChangeListener
 // @grant        GM_xmlhttpRequest
+// @grant        unsafeWindow
 // @connect      wcvwtpgbghgypdyfxjha.supabase.co
 // @updateURL    https://raw.githubusercontent.com/intellectcubed/mrs_tampermonkey/main/src/incident_drawer/ems-incident-drawer.user.js
 // @downloadURL  https://raw.githubusercontent.com/intellectcubed/mrs_tampermonkey/main/src/incident_drawer/ems-incident-drawer.user.js
@@ -691,9 +693,20 @@
         });
 
         selectBtn.addEventListener('click', () => {
-            GM_setValue('ems:selectedIncident', currentIncident);
-            alert('Incident selected and saved!');
-            // Close the drawer
+            // Parse the content JSON to get the full incident data
+            let incidentData;
+            try {
+                incidentData = JSON.parse(currentIncident.content);
+            } catch (e) {
+                console.error('Error parsing incident content:', e);
+                incidentData = currentIncident;
+            }
+
+            // Save to GM storage for IPC
+            GM_setValue('ems:selectedIncident', incidentData);
+            console.log('Incident selected:', incidentData);
+
+            // Close the drawer immediately (no alert)
             toggleDrawer();
         });
     }
@@ -708,26 +721,30 @@
     function injectStyles() {
         const style = document.createElement('style');
         style.textContent = `
-            /* Floating Button */
-            #ems-floating-btn {
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                z-index: 10000;
-                padding: 12px 24px;
-                background: #0066cc;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-size: 14px;
-                font-weight: 600;
+            /* Close Button */
+            #ems-close-btn {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                width: 30px;
+                height: 30px;
+                background: #f0f0f0;
+                border: 1px solid #ddd;
+                border-radius: 4px;
                 cursor: pointer;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                font-size: 18px;
+                font-weight: bold;
+                color: #666;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10001;
                 transition: background 0.2s;
             }
 
-            #ems-floating-btn:hover {
-                background: #0052a3;
+            #ems-close-btn:hover {
+                background: #e0e0e0;
+                color: #333;
             }
 
             /* Drawer */
@@ -743,7 +760,7 @@
                 z-index: 9999;
                 transition: right 0.3s ease;
                 overflow-y: auto;
-                border-left: 2px solid #bbb;
+                border-left: 1px solid #bbb;
                 opacity: 1;
             }
 
@@ -752,7 +769,7 @@
             }
 
             #ems-drawer-content {
-                padding: 24px;
+                padding: 12px;
                 background: #ffffff;
                 opacity: 1;
             }
@@ -1041,18 +1058,33 @@
             // Inject styles
             injectStyles();
 
-        // Create floating button
-        const floatingBtn = document.createElement('button');
-        floatingBtn.id = 'ems-floating-btn';
-        floatingBtn.textContent = 'EMS Incidents';
-        floatingBtn.addEventListener('click', toggleDrawer);
-        document.body.appendChild(floatingBtn);
+            // Create drawer
+            const drawer = document.createElement('div');
+            drawer.id = 'ems-drawer';
+            drawer.innerHTML = `
+                <button id="ems-close-btn" title="Close">×</button>
+                <div id="ems-drawer-content"></div>
+            `;
+            document.body.appendChild(drawer);
 
-        // Create drawer
-        const drawer = document.createElement('div');
-        drawer.id = 'ems-drawer';
-        drawer.innerHTML = '<div id="ems-drawer-content"></div>';
-        document.body.appendChild(drawer);
+            // Add close button handler
+            document.getElementById('ems-close-btn').addEventListener('click', () => {
+                toggleDrawer();
+            });
+
+            // Listen for drawer open requests
+            GM_addValueChangeListener('ems:drawer:open', function(name, oldValue, newValue, remote) {
+                console.log('ems:drawer:open changed:', newValue);
+                if (newValue === true) {
+                    // Open the drawer
+                    const drawer = document.getElementById('ems-drawer');
+                    if (drawer && !drawer.classList.contains('ems-drawer-open')) {
+                        toggleDrawer();
+                    }
+                    // Reset the flag
+                    GM_setValue('ems:drawer:open', false);
+                }
+            });
 
             // Check session and navigate to appropriate view
             const hasSession = await checkSession();
