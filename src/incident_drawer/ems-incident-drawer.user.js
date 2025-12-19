@@ -1,14 +1,15 @@
 // ==UserScript==
 // @name         EMS Incident Manager
 // @namespace    http://tampermonkey.net/
-// @version      1.0.1
+// @version      1.1.7
 // @description  EMS Incident drawer with Supabase integration
 // @author       You
 // @match        https://example.com/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
-// @require      https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js
+// @grant        GM_xmlhttpRequest
+// @connect      wcvwtpgbghgypdyfxjha.supabase.co
 // @updateURL    https://raw.githubusercontent.com/intellectcubed/mrs_tampermonkey/main/src/incident_drawer/ems-incident-drawer.user.js
 // @downloadURL  https://raw.githubusercontent.com/intellectcubed/mrs_tampermonkey/main/src/incident_drawer/ems-incident-drawer.user.js
 // ==/UserScript==
@@ -21,7 +22,7 @@
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indjdnd0cGdiZ2hneXBkeWZ4amhhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUyNDE0MTAsImV4cCI6MjA4MDgxNzQxMH0.Jz0xC8oROHDMKxLJMHQcwoLajdoKq_BrYdd-8vhqSaU';
 
     // ==================== STATE MANAGEMENT ====================
-    let supabase;
+    let supabaseClient;
     let currentView = 'login';
     let currentIncident = null;
     let incidents = [];
@@ -30,37 +31,194 @@
         incidentNumber: '',
         date: ''
     };
-    const PAGE_SIZE = 20;
+    let totalCount = 0;
+    const PAGE_SIZE = 7;
 
-    // ==================== SUPABASE INITIALIZATION ====================
-    function waitForSupabase() {
-        return new Promise((resolve, reject) => {
-            let attempts = 0;
-            const maxAttempts = 50;
+    // ==================== SUPABASE REST CLIENT ====================
+    // Simple REST client implementation to avoid library loading issues
+    class SupabaseClient {
+        constructor(url, anonKey) {
+            this.url = url;
+            this.anonKey = anonKey;
+            this.authToken = null;
+        }
 
-            const checkSupabase = () => {
-                attempts++;
-                console.log(`Checking for Supabase library (attempt ${attempts})...`);
-                console.log('window.supabase:', window.supabase);
-                console.log('window keys:', Object.keys(window).filter(k => k.toLowerCase().includes('supabase')));
-
-                if (window.supabase && typeof window.supabase.createClient === 'function') {
-                    console.log('Supabase library found!');
-                    resolve();
-                } else if (attempts >= maxAttempts) {
-                    reject(new Error('Supabase library failed to load after ' + maxAttempts + ' attempts'));
-                } else {
-                    setTimeout(checkSupabase, 100);
-                }
+        async request(endpoint, options = {}) {
+            const headers = {
+                'apikey': this.anonKey,
+                'Content-Type': 'application/json',
+                ...options.headers
             };
 
-            checkSupabase();
-        });
+            if (this.authToken) {
+                headers['Authorization'] = `Bearer ${this.authToken}`;
+            }
+
+            return new Promise((resolve, reject) => {
+                GM_xmlhttpRequest({
+                    method: options.method || 'GET',
+                    url: `${this.url}${endpoint}`,
+                    headers: headers,
+                    data: options.body ? JSON.stringify(options.body) : undefined,
+                    onload: (response) => {
+                        try {
+                            // Check for JWT expiration (401 Unauthorized)
+                            if (response.status === 401) {
+                                console.log('JWT expired, logging out...');
+                                GM_deleteValue('ems:session');
+                                this.authToken = null;
+                                // Navigate to login if we're not already there
+                                if (currentView !== 'login') {
+                                    alert('Your session has expired. Please log in again.');
+                                    navigateTo('login');
+                                }
+                                resolve({ data: null, error: { message: 'Session expired' }, responseHeaders: response.responseHeaders });
+                                return;
+                            }
+
+                            const data = JSON.parse(response.responseText);
+                            if (response.status >= 400) {
+                                resolve({ data: null, error: data, responseHeaders: response.responseHeaders });
+                            } else {
+                                resolve({ data, error: null, responseHeaders: response.responseHeaders });
+                            }
+                        } catch (e) {
+                            reject(e);
+                        }
+                    },
+                    onerror: (error) => reject(error)
+                });
+            });
+        }
+
+        auth = {
+            signInWithPassword: async ({ email, password }) => {
+                const result = await this.request('/auth/v1/token?grant_type=password', {
+                    method: 'POST',
+                    body: { email, password }
+                });
+
+                if (result.data && result.data.access_token) {
+                    this.authToken = result.data.access_token;
+                    return {
+                        data: {
+                            session: {
+                                access_token: result.data.access_token,
+                                refresh_token: result.data.refresh_token,
+                                user: result.data.user
+                            }
+                        },
+                        error: null
+                    };
+                }
+
+                return result;
+            },
+
+            setSession: async (session) => {
+                if (session && session.access_token) {
+                    this.authToken = session.access_token;
+                    return { data: { session }, error: null };
+                }
+                return { data: null, error: new Error('Invalid session') };
+            }
+        };
+
+        from(table) {
+            return new SupabaseQueryBuilder(this, table);
+        }
+    }
+
+    class SupabaseQueryBuilder {
+        constructor(client, table) {
+            this.client = client;
+            this.table = table;
+            this.queryParams = new URLSearchParams();
+            this.headers = {};
+            this.method = 'GET';
+            this.body = null;
+        }
+
+        select(columns = '*', options = {}) {
+            this.queryParams.set('select', columns);
+            if (options.count) {
+                this.headers['Prefer'] = 'count=exact';
+            }
+            return this;
+        }
+
+        eq(column, value) {
+            this.queryParams.set(column, `eq.${value}`);
+            return this;
+        }
+
+        ilike(column, pattern) {
+            this.queryParams.set(column, `ilike.${pattern}`);
+            return this;
+        }
+
+        gte(column, value) {
+            this.queryParams.set(column, `gte.${value}`);
+            return this;
+        }
+
+        lt(column, value) {
+            this.queryParams.set(column, `lt.${value}`);
+            return this;
+        }
+
+        order(column, options = {}) {
+            const direction = options.ascending ? 'asc' : 'desc';
+            this.queryParams.set('order', `${column}.${direction}`);
+            return this;
+        }
+
+        range(from, to) {
+            this.headers['Range'] = `${from}-${to}`;
+            this.headers['Range-Unit'] = 'items';
+            return this;
+        }
+
+        limit(count) {
+            this.queryParams.set('limit', count);
+            return this;
+        }
+
+        async single() {
+            this.headers['Accept'] = 'application/vnd.pgrst.object+json';
+            const result = await this.execute();
+            return result;
+        }
+
+        async execute() {
+            const endpoint = `/rest/v1/${this.table}?${this.queryParams.toString()}`;
+            const result = await this.client.request(endpoint, {
+                method: this.method,
+                headers: this.headers,
+                body: this.body
+            });
+
+            // Extract count from Content-Range header if requested
+            let count = null;
+            if (result.responseHeaders) {
+                // Content-Range header format: "0-6/62" or "0-6/*"
+                const contentRange = result.responseHeaders.match(/content-range:\s*(\d+)-(\d+)\/(\d+|\*)/i);
+                if (contentRange && contentRange[3] !== '*') {
+                    count = parseInt(contentRange[3]);
+                    console.log('Extracted count from Content-Range:', count);
+                }
+            }
+            return { ...result, count };
+        }
+
+        then(resolve, reject) {
+            return this.execute().then(resolve, reject);
+        }
     }
 
     function initSupabase() {
-        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        console.log('Supabase client initialized:', supabase);
+        supabaseClient = new SupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        console.log('Supabase REST client initialized');
     }
 
     // ==================== AUTHENTICATION ====================
@@ -69,7 +227,7 @@
         if (!sessionData) return false;
 
         try {
-            const { data, error } = await supabase.auth.setSession(sessionData);
+            const { data, error } = await supabaseClient.auth.setSession(sessionData);
             if (error) {
                 GM_deleteValue('ems:session');
                 return false;
@@ -83,7 +241,7 @@
 
     async function login(email, password) {
         try {
-            const { data, error } = await supabase.auth.signInWithPassword({
+            const { data, error } = await supabaseClient.auth.signInWithPassword({
                 email: email,
                 password: password
             });
@@ -106,29 +264,29 @@
         const from = page * PAGE_SIZE;
         const to = from + PAGE_SIZE - 1;
 
-        let query = supabase
-            .from('incidents')
+        let query = supabaseClient
+            .from('rip_and_runs')
             .select('*', { count: 'exact' })
-            .order('datetime', { ascending: false })
+            .order('incident_date', { ascending: false })
             .range(from, to);
 
         // Apply filters
         if (filters.incidentNumber) {
-            query = query.ilike('incident_number', `%${filters.incidentNumber}%`);
+            // incident_number is bigint, use exact match
+            const incidentNum = parseInt(filters.incidentNumber);
+            if (!isNaN(incidentNum)) {
+                query = query.eq('incident_number', incidentNum);
+            }
         }
 
         if (filters.date) {
             const startDate = new Date(filters.date);
             const endDate = new Date(filters.date);
             endDate.setDate(endDate.getDate() + 1);
-            query = query.gte('datetime', startDate.toISOString())
-                        .lt('datetime', endDate.toISOString());
-        } else {
-            // Default: last 7 days
-            const sevenDaysAgo = new Date();
-            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-            query = query.gte('datetime', sevenDaysAgo.toISOString());
+            query = query.gte('incident_date', startDate.toISOString())
+                        .lt('incident_date', endDate.toISOString());
         }
+        // No default date filter - show all incidents
 
         const { data, error, count } = await query;
 
@@ -140,11 +298,12 @@
         return { data, count };
     }
 
-    async function fetchIncidentDetails(incidentId) {
-        const { data: incident, error: incidentError } = await supabase
-            .from('incidents')
+    async function fetchIncidentDetails(incidentNumber, unitId) {
+        const { data: incident, error: incidentError } = await supabaseClient
+            .from('rip_and_runs')
             .select('*')
-            .eq('id', incidentId)
+            .eq('incident_number', incidentNumber)
+            .eq('unit_id', unitId)
             .single();
 
         if (incidentError) {
@@ -152,19 +311,8 @@
             return null;
         }
 
-        const { data: statuses, error: statusError } = await supabase
-            .from('incident_statuses')
-            .select('*')
-            .eq('incident_id', incidentId)
-            .order('datetime', { ascending: false })
-            .limit(20);
-
-        if (statusError) {
-            console.error('Error fetching statuses:', statusError);
-            incident.statuses = [];
-        } else {
-            incident.statuses = statuses || [];
-        }
+        // No separate statuses table, just return the incident
+        incident.statuses = [];
 
         return incident;
     }
@@ -195,18 +343,21 @@
     function renderIncidentListView() {
         return `
             <div class="ems-list-container">
-                <h2>EMS Incidents – Last 7 Days</h2>
+                <h2>EMS Incidents</h2>
 
                 <div class="ems-search-area">
                     <div class="ems-form-group">
                         <label for="ems-search-number">Incident Number</label>
-                        <input type="text" id="ems-search-number" value="${searchFilters.incidentNumber}">
+                        <input type="text" id="ems-search-number" value="${searchFilters.incidentNumber}" placeholder="Search by incident number">
                     </div>
                     <div class="ems-form-group">
                         <label for="ems-search-date">Date</label>
                         <input type="date" id="ems-search-date" value="${searchFilters.date}">
                     </div>
-                    <button id="ems-search-btn" class="ems-btn ems-btn-secondary">Search</button>
+                    <div class="ems-search-buttons">
+                        <button id="ems-search-btn" class="ems-btn ems-btn-secondary">Search</button>
+                        <button id="ems-clear-btn" class="ems-btn ems-btn-secondary">Clear</button>
+                    </div>
                 </div>
 
                 <div class="ems-table-container">
@@ -228,7 +379,7 @@
 
                 <div class="ems-pagination">
                     <button id="ems-prev-btn" class="ems-btn ems-btn-secondary" ${currentPage === 0 ? 'disabled' : ''}>Previous</button>
-                    <span class="ems-page-info">Page ${currentPage + 1}</span>
+                    <span id="ems-page-info" class="ems-page-info">Loading...</span>
                     <button id="ems-next-btn" class="ems-btn ems-btn-secondary">Next</button>
                 </div>
             </div>
@@ -241,17 +392,82 @@
         }
 
         return incidents.map(incident => `
-            <tr class="ems-incident-row" data-incident-id="${incident.id}">
+            <tr class="ems-incident-row" data-incident-number="${incident.incident_number}" data-unit-id="${incident.unit_id}">
                 <td>${incident.incident_number || 'N/A'}</td>
                 <td>${incident.unit_id || 'N/A'}</td>
-                <td>${formatDateTime(incident.datetime)}</td>
-                <td>${incident.address || 'N/A'}</td>
+                <td>${formatDateTime(incident.incident_date)}</td>
+                <td>${incident.location || 'N/A'}</td>
                 <td>${incident.incident_type || 'N/A'}</td>
             </tr>
         `).join('');
     }
 
+    function parseIncidentTimeline(content) {
+        try {
+            const data = JSON.parse(content);
+            const times = data.incidentTimes?.times || {};
+
+            // Convert times object to array of {status, datetime}
+            const timeline = [];
+            for (const [key, value] of Object.entries(times)) {
+                if (value.date && value.time) {
+                    // Combine date and time into a single datetime string
+                    const datetimeStr = `${value.date} ${value.time}`;
+                    const datetime = new Date(datetimeStr);
+
+                    // Convert camelCase key to readable status
+                    const status = key
+                        .replace(/([A-Z])/g, ' $1')
+                        .replace(/^./, str => str.toUpperCase())
+                        .trim();
+
+                    timeline.push({
+                        status: status,
+                        datetime: datetime,
+                        datetimeStr: datetimeStr
+                    });
+                }
+            }
+
+            // Sort by datetime
+            timeline.sort((a, b) => a.datetime - b.datetime);
+
+            return timeline;
+        } catch (e) {
+            console.error('Error parsing incident timeline:', e);
+            return [];
+        }
+    }
+
+    function formatTimelineDateTime(datetime) {
+        if (!datetime || isNaN(datetime.getTime())) return 'N/A';
+
+        const month = String(datetime.getMonth() + 1).padStart(2, '0');
+        const day = String(datetime.getDate()).padStart(2, '0');
+        const year = datetime.getFullYear();
+        const hours = String(datetime.getHours()).padStart(2, '0');
+        const minutes = String(datetime.getMinutes()).padStart(2, '0');
+        const seconds = String(datetime.getSeconds()).padStart(2, '0');
+
+        return `${month}/${day}/${year} ${hours}:${minutes}:${seconds}`;
+    }
+
+    function renderTimelineRows(timeline) {
+        if (timeline.length === 0) {
+            return '<tr><td colspan="2" class="ems-empty">No timeline data available</td></tr>';
+        }
+
+        return timeline.map(item => `
+            <tr>
+                <td>${item.status}</td>
+                <td>${formatTimelineDateTime(item.datetime)}</td>
+            </tr>
+        `).join('');
+    }
+
     function renderIncidentDetailsView(incident) {
+        const timeline = parseIncidentTimeline(incident.content);
+
         return `
             <div class="ems-details-container">
                 <a href="#" id="ems-back-link" class="ems-back-link">← Back to incidents</a>
@@ -261,44 +477,36 @@
                     <h3>Incident Information</h3>
                     <div class="ems-detail-grid">
                         <div class="ems-detail-item">
-                            <label>Incident Number:</label>
-                            <span>${incident.incident_number || 'N/A'}</span>
-                        </div>
-                        <div class="ems-detail-item">
                             <label>Unit ID:</label>
                             <span>${incident.unit_id || 'N/A'}</span>
                         </div>
                         <div class="ems-detail-item">
-                            <label>Date/Time:</label>
-                            <span>${formatDateTime(incident.datetime)}</span>
+                            <label>Location:</label>
+                            <span>${incident.location || 'N/A'}</span>
                         </div>
                         <div class="ems-detail-item">
                             <label>Incident Type:</label>
                             <span>${incident.incident_type || 'N/A'}</span>
                         </div>
-                        <div class="ems-detail-item ems-full-width">
-                            <label>Address:</label>
-                            <span>${incident.address || 'N/A'}</span>
-                        </div>
                     </div>
                 </div>
 
                 <div class="ems-panel">
-                    <h3>Status History</h3>
+                    <h3>Incident Timeline</h3>
                     <table class="ems-table">
                         <thead>
                             <tr>
-                                <th>Date/Time</th>
                                 <th>Status</th>
+                                <th>Date/Time</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderStatusRows(incident.statuses)}
+                            ${renderTimelineRows(timeline)}
                         </tbody>
                     </table>
                 </div>
 
-                <button id="ems-select-btn" class="ems-btn ems-btn-primary ems-btn-large">Select</button>
+                <button id="ems-select-btn" class="ems-btn ems-btn-primary ems-btn-large">Select This Incident</button>
             </div>
         `;
     }
@@ -346,8 +554,8 @@
                 await loadIncidents();
                 break;
             case 'details':
-                if (data && data.incidentId) {
-                    const incident = await fetchIncidentDetails(data.incidentId);
+                if (data && data.incidentNumber && data.unitId) {
+                    const incident = await fetchIncidentDetails(data.incidentNumber, data.unitId);
                     if (incident) {
                         currentIncident = incident;
                         content.innerHTML = renderIncidentDetailsView(incident);
@@ -364,6 +572,7 @@
 
         const { data, count } = await fetchIncidents(currentPage, searchFilters);
         incidents = data;
+        totalCount = count || 0;
 
         tbody.innerHTML = renderIncidentRows(incidents);
         attachIncidentRowHandlers();
@@ -371,9 +580,21 @@
         // Update pagination buttons
         const prevBtn = document.getElementById('ems-prev-btn');
         const nextBtn = document.getElementById('ems-next-btn');
+        const pageInfo = document.getElementById('ems-page-info');
 
         if (prevBtn) prevBtn.disabled = currentPage === 0;
         if (nextBtn) nextBtn.disabled = data.length < PAGE_SIZE;
+
+        // Update pagination info
+        if (pageInfo) {
+            const startIndex = currentPage * PAGE_SIZE + 1;
+            const endIndex = currentPage * PAGE_SIZE + data.length;
+            if (data.length === 0) {
+                pageInfo.innerHTML = 'No incidents found';
+            } else {
+                pageInfo.innerHTML = `Showing Incidents<br>${startIndex} - ${endIndex}<br>of ${totalCount}`;
+            }
+        }
     }
 
     // ==================== EVENT HANDLERS ====================
@@ -393,12 +614,44 @@
 
     function attachListHandlers() {
         const searchBtn = document.getElementById('ems-search-btn');
+        const clearBtn = document.getElementById('ems-clear-btn');
         const prevBtn = document.getElementById('ems-prev-btn');
         const nextBtn = document.getElementById('ems-next-btn');
+        const incidentNumberInput = document.getElementById('ems-search-number');
+        const dateInput = document.getElementById('ems-search-date');
+
+        // Make fields mutually exclusive - when one is filled, clear the other
+        incidentNumberInput.addEventListener('input', () => {
+            if (incidentNumberInput.value.trim()) {
+                dateInput.value = '';
+                searchFilters.date = '';
+            }
+        });
+
+        dateInput.addEventListener('input', () => {
+            if (dateInput.value) {
+                incidentNumberInput.value = '';
+                searchFilters.incidentNumber = '';
+            }
+        });
 
         searchBtn.addEventListener('click', () => {
-            searchFilters.incidentNumber = document.getElementById('ems-search-number').value;
-            searchFilters.date = document.getElementById('ems-search-date').value;
+            searchFilters.incidentNumber = incidentNumberInput.value.trim();
+            searchFilters.date = dateInput.value;
+            currentPage = 0;
+            loadIncidents();
+        });
+
+        clearBtn.addEventListener('click', () => {
+            // Reset search filters
+            searchFilters.incidentNumber = '';
+            searchFilters.date = '';
+
+            // Clear input fields
+            incidentNumberInput.value = '';
+            dateInput.value = '';
+
+            // Reset to first page and reload
             currentPage = 0;
             loadIncidents();
         });
@@ -420,8 +673,9 @@
         const rows = document.querySelectorAll('.ems-incident-row');
         rows.forEach(row => {
             row.addEventListener('click', () => {
-                const incidentId = row.getAttribute('data-incident-id');
-                navigateTo('details', { incidentId });
+                const incidentNumber = row.getAttribute('data-incident-number');
+                const unitId = row.getAttribute('data-unit-id');
+                navigateTo('details', { incidentNumber, unitId });
             });
         });
     }
@@ -438,6 +692,8 @@
         selectBtn.addEventListener('click', () => {
             GM_setValue('ems:selectedIncident', currentIncident);
             alert('Incident selected and saved!');
+            // Close the drawer
+            toggleDrawer();
         });
     }
 
@@ -482,10 +738,12 @@
                 min-width: 400px;
                 height: 100vh;
                 background: #ffffff;
-                box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+                box-shadow: -4px 0 16px rgba(0,0,0,0.3);
                 z-index: 9999;
                 transition: right 0.3s ease;
                 overflow-y: auto;
+                border-left: 2px solid #bbb;
+                opacity: 1;
             }
 
             #ems-drawer.ems-drawer-open {
@@ -493,7 +751,9 @@
             }
 
             #ems-drawer-content {
-                padding: 20px;
+                padding: 24px;
+                background: #ffffff;
+                opacity: 1;
             }
 
             /* Login View */
@@ -502,13 +762,15 @@
                 align-items: center;
                 justify-content: center;
                 min-height: 100vh;
+                background: #ffffff;
             }
 
             .ems-login-card {
-                background: #f8f9fa;
+                background: #ffffff;
                 padding: 32px;
                 border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                border: 1px solid #e0e0e0;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.08);
                 max-width: 320px;
                 width: 100%;
             }
@@ -595,6 +857,10 @@
             }
 
             /* List View */
+            .ems-list-container {
+                background: #ffffff;
+            }
+
             .ems-list-container h2 {
                 margin: 0 0 20px 0;
                 font-size: 20px;
@@ -602,21 +868,29 @@
             }
 
             .ems-search-area {
-                display: grid;
-                grid-template-columns: 1fr 1fr auto;
+                display: flex;
+                flex-direction: column;
                 gap: 12px;
                 margin-bottom: 20px;
                 padding: 16px;
-                background: #f8f9fa;
+                background: #f5f5f5;
                 border-radius: 6px;
+                border: 1px solid #e0e0e0;
             }
 
             .ems-search-area .ems-form-group {
                 margin-bottom: 0;
             }
 
-            .ems-search-area .ems-btn {
-                margin-top: 26px;
+            .ems-search-buttons {
+                display: flex;
+                gap: 8px;
+                margin-top: 4px;
+            }
+
+            .ems-search-buttons .ems-btn {
+                white-space: nowrap;
+                flex: 1;
             }
 
             /* Table */
@@ -635,7 +909,7 @@
             }
 
             .ems-table thead {
-                background: #f8f9fa;
+                background: #fafafa;
                 position: sticky;
                 top: 0;
                 z-index: 10;
@@ -645,8 +919,8 @@
                 padding: 12px 8px;
                 text-align: left;
                 font-weight: 600;
-                color: #333;
-                border-bottom: 2px solid #e0e0e0;
+                color: #1a1a1a;
+                border-bottom: 2px solid #ddd;
             }
 
             .ems-table td {
@@ -658,10 +932,11 @@
             .ems-incident-row {
                 cursor: pointer;
                 transition: background 0.1s;
+                background: #ffffff;
             }
 
             .ems-incident-row:hover {
-                background: #f8f9fa;
+                background: #f0f7ff;
             }
 
             .ems-loading, .ems-empty {
@@ -681,9 +956,15 @@
             .ems-page-info {
                 font-size: 14px;
                 color: #666;
+                text-align: center;
+                line-height: 1.4;
             }
 
             /* Details View */
+            .ems-details-container {
+                background: #ffffff;
+            }
+
             .ems-details-container h2 {
                 margin: 0 0 20px 0;
                 font-size: 20px;
@@ -704,7 +985,8 @@
             }
 
             .ems-panel {
-                background: #f8f9fa;
+                background: #ffffff;
+                border: 1px solid #e0e0e0;
                 border-radius: 6px;
                 padding: 20px;
                 margin-bottom: 20px;
@@ -714,6 +996,7 @@
                 margin: 0 0 16px 0;
                 font-size: 16px;
                 color: #1a1a1a;
+                font-weight: 600;
             }
 
             .ems-detail-grid {
@@ -751,11 +1034,7 @@
     // ==================== INITIALIZATION ====================
     async function init() {
         try {
-            // Wait for Supabase library to load
-            console.log('Waiting for Supabase library...');
-            await waitForSupabase();
-
-            // Initialize Supabase
+            // Initialize Supabase REST client
             initSupabase();
 
             // Inject styles
