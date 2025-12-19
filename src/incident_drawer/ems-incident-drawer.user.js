@@ -8,7 +8,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
-// @require      https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2
+// @require      https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js
 // @updateURL    https://raw.githubusercontent.com/intellectcubed/mrs_tampermonkey/main/src/incident_drawer/ems-incident-drawer.user.js
 // @downloadURL  https://raw.githubusercontent.com/intellectcubed/mrs_tampermonkey/main/src/incident_drawer/ems-incident-drawer.user.js
 // ==/UserScript==
