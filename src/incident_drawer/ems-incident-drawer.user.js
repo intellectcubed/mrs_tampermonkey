@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         EMS Incident Manager
+// @name         EMS Incident Drawer
 // @namespace    http://tampermonkey.net/
-// @version      1.4.0
+// @version      1.4.3
 // @description  EMS Incident drawer with Supabase integration
 // @author       You
 // @match        https://example.com/*
@@ -72,7 +72,6 @@
                                 this.authToken = null;
                                 // Navigate to login if we're not already there
                                 if (currentView !== 'login') {
-                                    alert('Your session has expired. Please log in again.');
                                     navigateTo('login');
                                 }
                                 resolve({ data: null, error: { message: 'Session expired' }, responseHeaders: response.responseHeaders });
@@ -697,6 +696,11 @@
             let incidentData;
             try {
                 incidentData = JSON.parse(currentIncident.content);
+                // Merge top-level database fields with parsed content
+                incidentData.incident_number = currentIncident.incident_number;
+                incidentData.unit_id = currentIncident.unit_id;
+                incidentData.incident_date = currentIncident.incident_date;
+                incidentData.location = currentIncident.location;
             } catch (e) {
                 console.error('Error parsing incident content:', e);
                 incidentData = currentIncident;
@@ -1077,21 +1081,23 @@
             });
 
             // Listen for drawer open requests via custom events
-            window.addEventListener('ems:openDrawer', function() {
+            window.addEventListener('ems:openDrawer', async function() {
                 console.log('[EMS Drawer] Received openDrawer event');
                 const drawer = document.getElementById('ems-drawer');
                 if (drawer && !drawer.classList.contains('ems-drawer-open')) {
+                    // Check session and navigate to appropriate view when opening drawer
+                    const hasSession = await checkSession();
+                    if (hasSession) {
+                        await navigateTo('list');
+                    } else {
+                        await navigateTo('login');
+                    }
                     toggleDrawer();
                 }
             });
 
-            // Check session and navigate to appropriate view
-            const hasSession = await checkSession();
-            if (hasSession) {
-                navigateTo('list');
-            } else {
-                navigateTo('login');
-            }
+            // Initialize with login view (but don't show the drawer yet)
+            await navigateTo('login');
         } catch (error) {
             console.error('Initialization error:', error);
             alert('Failed to initialize EMS Incident Manager: ' + error.message);

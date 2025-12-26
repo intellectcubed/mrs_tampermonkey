@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PCR Toolbar
 // @namespace    http://tampermonkey.net/
-// @version      1.4.0
+// @version      1.4.1
 // @description  PCR Toolbar enhancement script - Automates populating call times
 // @author       Your Name
 // @match        https://newjersey.imagetrendelite.com/Elite/Organizationnewjersey/Agencymartinsvil/EmsRunForm
@@ -10,6 +10,7 @@
 // @downloadURL  https://raw.githubusercontent.com/intellectcubed/mrs_tampermonkey/main/src/pcr_toolbar/pcr_toolbar.user.js
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_deleteValue
 // @grant        unsafeWindow
 // ==/UserScript==
 
@@ -247,11 +248,14 @@
         const incidentData = getIncidentData();
         const onTimesPage = isOnTimesPage();
         const onAddressPage = isOnAddressPage();
-        const hasData = incidentData !== null;
 
-        // Update Times button - only active on Times page
+        // Check if data exists AND has the required fields
+        const hasTimesData = incidentData !== null && incidentData.incidentTimes !== undefined;
+        const hasAddressData = incidentData !== null && incidentData.incidentLocation !== undefined;
+
+        // Update Times button - only active on Times page with valid times data
         if (timesBtn) {
-            const shouldEnableTimes = onTimesPage && hasData;
+            const shouldEnableTimes = onTimesPage && hasTimesData;
             timesBtn.disabled = !shouldEnableTimes;
             if (shouldEnableTimes) {
                 timesBtn.style.opacity = '1';
@@ -262,9 +266,9 @@
             }
         }
 
-        // Update Address button - only active on Address page
+        // Update Address button - only active on Address page with valid address data
         if (addressBtn) {
-            const shouldEnableAddress = onAddressPage && hasData;
+            const shouldEnableAddress = onAddressPage && hasAddressData;
             addressBtn.disabled = !shouldEnableAddress;
             if (shouldEnableAddress) {
                 addressBtn.style.opacity = '1';
@@ -633,16 +637,35 @@
         console.log('PCR Toolbar script initializing...');
         console.log('Field mapping configuration loaded:', fieldMapping);
 
-        // Clear global incident data
+        // Clear global incident data from memory
         unsafeWindow.EMSIncidentData = null;
 
+        // Clear any stored incident data from persistent storage
+        const oldValue = GM_getValue("incident_json");
+        if (oldValue !== undefined) {
+            console.log('pcr_toolbar:: Found old incident data, deleting...', oldValue);
+            GM_deleteValue("incident_json");
+            // Verify deletion
+            const checkValue = GM_getValue("incident_json");
+            console.log('pcr_toolbar:: After deletion, value is:', checkValue);
+        } else {
+            console.log('pcr_toolbar:: No old incident data to delete');
+        }
+
         // Listen for incident selection events from drawer
+        console.log('[PCR Toolbar] Setting up event listener for ems:incidentSelected');
         window.addEventListener('ems:incidentSelected', function(e) {
-            console.log('[PCR Toolbar] Received incidentSelected event:', e.detail);
+            console.log('[PCR Toolbar] *** EVENT RECEIVED ***');
+            console.log('[PCR Toolbar] Event detail:', e.detail);
+            console.log('[PCR Toolbar] Full event:', e);
             if (e.detail && e.detail.incident) {
+                console.log('[PCR Toolbar] Calling handleIncidentSelection with:', e.detail.incident);
                 handleIncidentSelection(e.detail.incident);
+            } else {
+                console.log('[PCR Toolbar] Event detail or incident is missing');
             }
         });
+        console.log('[PCR Toolbar] Event listener registered successfully');
 
         // Wait for page to be ready, then wait for top-pane element
         if (document.readyState === 'loading') {
