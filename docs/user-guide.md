@@ -1,3 +1,8 @@
+---
+title: PCR Toolbar User Guide
+nav_order: 1
+---
+
 # PCR Toolbar User Guide
 
 The PCR Toolbar appears at the top of the screen on the New Incident page: 
