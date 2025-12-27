@@ -17,6 +17,10 @@
 (function() {
     'use strict';
 
+    // ==================== CONFIGURATION ====================
+    // Set to true to show the Debug button on the toolbar
+    const SHOW_DEBUG_BUTTON = false;
+
     // Field mapping configuration - Update field IDs here as needed
     const fieldMapping = {
         "incidentTimes": {
@@ -569,21 +573,23 @@
         addressBtn.addEventListener('click', handleAddressClick);
         buttonContainer.appendChild(addressBtn);
 
-        // Create Debug button (always enabled)
-        const debugBtn = document.createElement('button');
-        debugBtn.textContent = 'Debug';
-        debugBtn.style.cssText = `
-            padding: 4px 10px;
-            font-size: 12px;
-            cursor: pointer;
-            opacity: 1;
-            border: 1px solid #0066cc;
-            background-color: #0066cc;
-            color: white;
-            border-radius: 3px;
-        `;
-        debugBtn.addEventListener('click', handleDebugClick);
-        buttonContainer.appendChild(debugBtn);
+        // Create Debug button (only if enabled in configuration)
+        if (SHOW_DEBUG_BUTTON) {
+            const debugBtn = document.createElement('button');
+            debugBtn.textContent = 'Debug';
+            debugBtn.style.cssText = `
+                padding: 4px 10px;
+                font-size: 12px;
+                cursor: pointer;
+                opacity: 1;
+                border: 1px solid #0066cc;
+                background-color: #0066cc;
+                color: white;
+                border-radius: 3px;
+            `;
+            debugBtn.addEventListener('click', handleDebugClick);
+            buttonContainer.appendChild(debugBtn);
+        }
 
         // Create incident display field (rightmost)
         incidentDisplayField = document.createElement('input');
