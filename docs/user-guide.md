@@ -29,7 +29,7 @@ When you first click the **Incidents** button, you'll need to log in to the inci
 
 In its initial state, there is no incident information loaded, so the right portion of the toolbar will read "No Incident". When you press the **Incidents** button, the incident drawer slides out from the right side of the screen.
 
-![Incident Drawer](images/drawer_list.png)
+![Incident Drawer](images/drawer_incident_list.png)
 
 
 ### Searching for Incidents
