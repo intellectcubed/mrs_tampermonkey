@@ -573,6 +573,24 @@
         addressBtn.addEventListener('click', handleAddressClick);
         buttonContainer.appendChild(addressBtn);
 
+        // Create Help button
+        const helpBtn = document.createElement('button');
+        helpBtn.textContent = 'Help';
+        helpBtn.style.cssText = `
+            padding: 4px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            opacity: 1;
+            border: 1px solid #666;
+            background-color: #666;
+            color: white;
+            border-radius: 3px;
+        `;
+        helpBtn.addEventListener('click', () => {
+            window.open('https://intellectcubed.github.io/mrs_tampermonkey/', '_blank');
+        });
+        buttonContainer.appendChild(helpBtn);
+
         // Create Debug button (only if enabled in configuration)
         if (SHOW_DEBUG_BUTTON) {
             const debugBtn = document.createElement('button');
