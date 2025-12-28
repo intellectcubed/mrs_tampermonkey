@@ -3,6 +3,8 @@ title: Populating data with Incident Data
 nav_order: 4
 ---
 
+# Populating data with Incident Data
+
 ![Toolbar with incident](images/toolbar_with_incident.png)
 
 ## Populating Data from Incidents
