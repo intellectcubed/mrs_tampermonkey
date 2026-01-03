@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         EMS Incident Drawer
 // @namespace    http://tampermonkey.net/
-// @version      1.4.3
+// @version      1.4.4
 // @description  EMS Incident drawer with Supabase integration
 // @author       You
 // @match        https://example.com/*
@@ -320,6 +320,28 @@
     }
 
     // ==================== UI RENDERING ====================
+    function renderLoadingView() {
+        return `
+            <div class="ems-loading-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 400px;">
+                <div class="ems-spinner" style="
+                    border: 4px solid #f3f3f3;
+                    border-top: 4px solid #0066cc;
+                    border-radius: 50%;
+                    width: 50px;
+                    height: 50px;
+                    animation: spin 1s linear infinite;
+                "></div>
+                <p style="margin-top: 20px; color: #666; font-size: 14px;">Loading...</p>
+                <style>
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                </style>
+            </div>
+        `;
+    }
+
     function renderLoginView() {
         return `
             <div class="ems-login-container">
@@ -546,6 +568,9 @@
         const content = document.getElementById('ems-drawer-content');
 
         switch(view) {
+            case 'loading':
+                content.innerHTML = renderLoadingView();
+                break;
             case 'login':
                 content.innerHTML = renderLoginView();
                 attachLoginHandlers();
@@ -1085,14 +1110,19 @@
                 console.log('[EMS Drawer] Received openDrawer event');
                 const drawer = document.getElementById('ems-drawer');
                 if (drawer && !drawer.classList.contains('ems-drawer-open')) {
-                    // Check session and navigate to appropriate view when opening drawer
+                    // Open drawer immediately
+                    toggleDrawer();
+
+                    // Show loading spinner
+                    await navigateTo('loading');
+
+                    // Check session and navigate to appropriate view in the background
                     const hasSession = await checkSession();
                     if (hasSession) {
                         await navigateTo('list');
                     } else {
                         await navigateTo('login');
                     }
-                    toggleDrawer();
                 }
             });
 
