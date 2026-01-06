@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         EMS Incident Drawer
 // @namespace    http://tampermonkey.net/
-// @version      1.4.4
+// @version      1.4.5
 // @description  EMS Incident drawer with Supabase integration
 // @author       You
 // @match        https://example.com/*
@@ -551,15 +551,19 @@
     // ==================== UTILITIES ====================
     function formatDateTime(datetime) {
         if (!datetime) return 'N/A';
-        const date = new Date(datetime);
-        return date.toLocaleString('en-US', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false
-        });
+
+        // Parse the datetime string directly to avoid timezone conversion
+        // Database stores in EST, display as-is without converting to browser timezone
+        const dateStr = datetime.replace('T', ' ').replace('Z', '').split('.')[0];
+        const parts = dateStr.split(' ');
+        const datePart = parts[0]; // YYYY-MM-DD
+        const timePart = parts[1] || '00:00:00'; // HH:MM:SS
+
+        const [year, month, day] = datePart.split('-');
+        const [hour, minute] = timePart.split(':');
+
+        // Format as MM/DD/YYYY HH:MM
+        return `${month}/${day}/${year} ${hour}:${minute}`;
     }
 
     // ==================== VIEW MANAGEMENT ====================
