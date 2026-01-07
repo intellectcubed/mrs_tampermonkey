@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         EMS Incident Drawer
 // @namespace    http://tampermonkey.net/
-// @version      1.4.5
+// @version      1.4.6
 // @description  EMS Incident drawer with Supabase integration
 // @author       You
 // @match        https://example.com/*
@@ -351,11 +351,11 @@
                     <form id="ems-login-form">
                         <div class="ems-form-group">
                             <label for="ems-email">Email</label>
-                            <input type="email" id="ems-email" required autocomplete="username">
+                            <input type="email" id="ems-email" name="ems-drawer-email" required autocomplete="section-ems-drawer username">
                         </div>
                         <div class="ems-form-group">
                             <label for="ems-password">Password</label>
-                            <input type="password" id="ems-password" required autocomplete="current-password">
+                            <input type="password" id="ems-password" name="ems-drawer-password" required autocomplete="section-ems-drawer current-password">
                         </div>
                         <button type="submit" class="ems-btn ems-btn-primary">Login</button>
                     </form>
