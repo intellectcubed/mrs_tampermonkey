@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         EMS Incident Drawer
 // @namespace    http://tampermonkey.net/
-// @version      1.4.7
+// @version      1.4.8
 // @description  EMS Incident drawer with Supabase integration
 // @author       You
 // @match        https://example.com/*
@@ -303,7 +303,7 @@
     async function fetchIncidentDetails(incidentNumber, unitId) {
         const { data: incident, error: incidentError } = await supabaseClient
             .from('rip_and_runs')
-            .select('*')
+            .select('incident_number,unit_id,incident_date,location,incident_type,content,pcr_url')
             .eq('incident_number', incidentNumber)
             .eq('unit_id', unitId)
             .single();
