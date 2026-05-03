@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PCR Toolbar
 // @namespace    http://tampermonkey.net/
-// @version      1.4.3
+// @version      1.4.4
 // @description  PCR Toolbar enhancement script - Automates populating call times
 // @author       Your Name
 // @match        https://newjersey.imagetrendelite.com/Elite/Organizationnewjersey/Agencymartinsvil/EmsRunForm
@@ -11,7 +11,9 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_deleteValue
+// @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
+// @connect      wcvwtpgbghgypdyfxjha.supabase.co
 // ==/UserScript==
 
 (function() {
@@ -450,24 +452,26 @@
             return;
         }
 
-        try {
-            const response = await fetch(incidentData.pdf_url);
-            if (!response.ok) {
-                throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: incidentData.pdf_url,
+            responseType: 'blob',
+            onload: function(response) {
+                const blob = response.response;
+                const objectUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = objectUrl;
+                a.download = `pcr_${incidentData.incident_number || 'download'}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(objectUrl);
+                console.log('PCR PDF download triggered');
+            },
+            onerror: function(error) {
+                console.error('Error downloading PCR PDF:', error);
             }
-            const blob = await response.blob();
-            const objectUrl = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = objectUrl;
-            a.download = `pcr_${incidentData.incident_number || 'download'}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(objectUrl);
-            console.log('PCR PDF download triggered');
-        } catch (error) {
-            console.error('Error downloading PCR PDF:', error);
-        }
+        });
     }
 
     /**
