@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PCR Toolbar
 // @namespace    http://tampermonkey.net/
-// @version      1.4.2
+// @version      1.4.3
 // @description  PCR Toolbar enhancement script - Automates populating call times
 // @author       Your Name
 // @match        https://newjersey.imagetrendelite.com/Elite/Organizationnewjersey/Agencymartinsvil/EmsRunForm
@@ -284,9 +284,9 @@
             }
         }
 
-        // Update PCR download button - enabled whenever pcr_url is present
+        // Update PCR download button - enabled whenever pdf_url is present
         if (pcrBtn) {
-            const hasPcrUrl = incidentData !== null && !!incidentData.pcr_url;
+            const hasPcrUrl = incidentData !== null && !!incidentData.pdf_url;
             pcrBtn.disabled = !hasPcrUrl;
             if (hasPcrUrl) {
                 pcrBtn.style.opacity = '1';
@@ -445,13 +445,13 @@
      */
     async function handlePcrDownloadClick() {
         const incidentData = getIncidentData();
-        if (!incidentData || !incidentData.pcr_url) {
+        if (!incidentData || !incidentData.pdf_url) {
             console.error('No PCR URL available');
             return;
         }
 
         try {
-            const response = await fetch(incidentData.pcr_url);
+            const response = await fetch(incidentData.pdf_url);
             if (!response.ok) {
                 throw new Error(`Download failed: ${response.status} ${response.statusText}`);
             }

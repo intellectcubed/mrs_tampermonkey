@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         EMS Incident Drawer
 // @namespace    http://tampermonkey.net/
-// @version      1.4.8
+// @version      1.4.9
 // @description  EMS Incident drawer with Supabase integration
 // @author       You
 // @match        https://example.com/*
@@ -303,7 +303,7 @@
     async function fetchIncidentDetails(incidentNumber, unitId) {
         const { data: incident, error: incidentError } = await supabaseClient
             .from('rip_and_runs')
-            .select('incident_number,unit_id,incident_date,location,incident_type,content,pcr_url')
+            .select('incident_number,unit_id,incident_date,location,incident_type,content,pdf_url')
             .eq('incident_number', incidentNumber)
             .eq('unit_id', unitId)
             .single();
@@ -730,7 +730,7 @@
                 incidentData.unit_id = currentIncident.unit_id;
                 incidentData.incident_date = currentIncident.incident_date;
                 incidentData.location = currentIncident.location;
-                incidentData.pcr_url = currentIncident.pcr_url;
+                incidentData.pdf_url = currentIncident.pdf_url;
             } catch (e) {
                 console.error('Error parsing incident content:', e);
                 incidentData = currentIncident;
