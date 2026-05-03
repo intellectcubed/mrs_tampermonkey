@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PCR Toolbar
 // @namespace    http://tampermonkey.net/
-// @version      1.4.1
+// @version      1.4.2
 // @description  PCR Toolbar enhancement script - Automates populating call times
 // @author       Your Name
 // @match        https://newjersey.imagetrendelite.com/Elite/Organizationnewjersey/Agencymartinsvil/EmsRunForm
@@ -71,6 +71,7 @@
     // UI elements
     let timesBtn = null;
     let addressBtn = null;
+    let pcrBtn = null;
     let incidentNumberSpan = null;
     let incidentsBtn = null;
     let incidentDisplayField = null;
@@ -283,6 +284,19 @@
             }
         }
 
+        // Update PCR download button - enabled whenever pcr_url is present
+        if (pcrBtn) {
+            const hasPcrUrl = incidentData !== null && !!incidentData.pcr_url;
+            pcrBtn.disabled = !hasPcrUrl;
+            if (hasPcrUrl) {
+                pcrBtn.style.opacity = '1';
+                pcrBtn.style.cursor = 'pointer';
+            } else {
+                pcrBtn.style.opacity = '0.5';
+                pcrBtn.style.cursor = 'not-allowed';
+            }
+        }
+
         // Update incident number display
         if (incidentNumberSpan) {
             if (incidentData && incidentData.incidentNumber) {
@@ -423,6 +437,36 @@
             console.log('Incident selected:', incidentObject.incident_number);
         } else {
             console.log('No valid incident selected');
+        }
+    }
+
+    /**
+     * Handle PCR PDF download button click
+     */
+    async function handlePcrDownloadClick() {
+        const incidentData = getIncidentData();
+        if (!incidentData || !incidentData.pcr_url) {
+            console.error('No PCR URL available');
+            return;
+        }
+
+        try {
+            const response = await fetch(incidentData.pcr_url);
+            if (!response.ok) {
+                throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+            }
+            const blob = await response.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = objectUrl;
+            a.download = `pcr_${incidentData.incident_number || 'download'}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(objectUrl);
+            console.log('PCR PDF download triggered');
+        } catch (error) {
+            console.error('Error downloading PCR PDF:', error);
         }
     }
 
@@ -572,6 +616,23 @@
         `;
         addressBtn.addEventListener('click', handleAddressClick);
         buttonContainer.appendChild(addressBtn);
+
+        // Create PCR download button (initially disabled)
+        pcrBtn = document.createElement('button');
+        pcrBtn.textContent = 'PCR';
+        pcrBtn.disabled = true;
+        pcrBtn.style.cssText = `
+            padding: 4px 10px;
+            font-size: 12px;
+            cursor: not-allowed;
+            opacity: 0.5;
+            border: 1px solid #0066cc;
+            background-color: #0066cc;
+            color: white;
+            border-radius: 3px;
+        `;
+        pcrBtn.addEventListener('click', handlePcrDownloadClick);
+        buttonContainer.appendChild(pcrBtn);
 
         // Create Help button
         const helpBtn = document.createElement('button');
