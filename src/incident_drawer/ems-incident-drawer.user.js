@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         EMS Incident Drawer
 // @namespace    http://tampermonkey.net/
-// @version      1.4.6
+// @version      1.4.7
 // @description  EMS Incident drawer with Supabase integration
 // @author       You
 // @match        https://example.com/*
@@ -730,6 +730,7 @@
                 incidentData.unit_id = currentIncident.unit_id;
                 incidentData.incident_date = currentIncident.incident_date;
                 incidentData.location = currentIncident.location;
+                incidentData.pcr_url = currentIncident.pcr_url;
             } catch (e) {
                 console.error('Error parsing incident content:', e);
                 incidentData = currentIncident;
