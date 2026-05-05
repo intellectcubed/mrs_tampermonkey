@@ -73,7 +73,7 @@
     // UI elements
     let timesBtn = null;
     let addressBtn = null;
-    let pcrBtn = null;
+    let downloadBtn = null;
     let incidentNumberSpan = null;
     let incidentsBtn = null;
     let incidentDisplayField = null;
@@ -287,15 +287,15 @@
         }
 
         // Update PCR download button - enabled whenever pdf_url is present
-        if (pcrBtn) {
+        if (downloadBtn) {
             const hasPcrUrl = incidentData !== null && !!incidentData.pdf_url;
-            pcrBtn.disabled = !hasPcrUrl;
+            downloadBtn.disabled = !hasPcrUrl;
             if (hasPcrUrl) {
-                pcrBtn.style.opacity = '1';
-                pcrBtn.style.cursor = 'pointer';
+                downloadBtn.style.opacity = '1';
+                downloadBtn.style.cursor = 'pointer';
             } else {
-                pcrBtn.style.opacity = '0.5';
-                pcrBtn.style.cursor = 'not-allowed';
+                downloadBtn.style.opacity = '0.5';
+                downloadBtn.style.cursor = 'not-allowed';
             }
         }
 
@@ -622,10 +622,10 @@
         buttonContainer.appendChild(addressBtn);
 
         // Create PCR download button (initially disabled)
-        pcrBtn = document.createElement('button');
-        pcrBtn.textContent = 'PCR';
-        pcrBtn.disabled = true;
-        pcrBtn.style.cssText = `
+        downloadBtn = document.createElement('button');
+        downloadBtn.textContent = 'Download';
+        downloadBtn.disabled = true;
+        downloadBtn.style.cssText = `
             padding: 4px 10px;
             font-size: 12px;
             cursor: not-allowed;
@@ -635,8 +635,8 @@
             color: white;
             border-radius: 3px;
         `;
-        pcrBtn.addEventListener('click', handlePcrDownloadClick);
-        buttonContainer.appendChild(pcrBtn);
+        downloadBtn.addEventListener('click', handlePcrDownloadClick);
+        buttonContainer.appendChild(downloadBtn);
 
         // Create Help button
         const helpBtn = document.createElement('button');
