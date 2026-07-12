@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PCR Toolbar
 // @namespace    http://tampermonkey.net/
-// @version      1.4.4
+// @version      1.4.5
 // @description  PCR Toolbar enhancement script - Automates populating call times
 // @author       Your Name
 // @match        https://newjersey.imagetrendelite.com/Elite/Organizationnewjersey/Agencymartinsvil/EmsRunForm
@@ -461,15 +461,15 @@
                 const objectUrl = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = objectUrl;
-                a.download = `pcr_${incidentData.incident_number || 'download'}.pdf`;
+                a.download = `ripandrun_${incidentData.incident_number || 'download'}.pdf`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(objectUrl);
-                console.log('PCR PDF download triggered');
+                console.log('Rip and run PDF download triggered');
             },
             onerror: function(error) {
-                console.error('Error downloading PCR PDF:', error);
+                console.error('Error downloading Rip and Run PDF:', error);
             }
         });
     }
